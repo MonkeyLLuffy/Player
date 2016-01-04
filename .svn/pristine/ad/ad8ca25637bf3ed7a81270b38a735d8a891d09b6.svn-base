@@ -1,0 +1,217 @@
+package com.monkeylluffy.recorder;
+
+import android.R.integer;
+import android.app.IntentService;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;// 服务的类
+import android.media.AudioManager;
+import android.media.AudioManager.OnAudioFocusChangeListener;
+import android.media.MediaPlayer;
+import android.media.MediaPlayer.OnPreparedListener;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Binder;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.res.AssetFileDescriptor;
+import android.util.Log;
+import android.widget.ProgressBar;
+import android.widget.RemoteViews;
+import android.widget.Toast;
+
+/** 计数的服务 */
+public class CountService extends Service {
+
+	/** 创建参数 */
+	private MediaPlayer player;// 用于播放音乐
+
+	private int currentTime; // 当前播放进度
+	private int duration; // 播放长度
+
+	private String BROAD_SERVICE_PLAY = "com.monkeyLLuffy.service.play";// 控制播放
+	private String BROAD_SERVICE_PAUSE = "com.monkeyLLuffy.service.pause";// 控制暂停
+	private String BROAD_SERVICE_SEEKTO = "com.monkeyLLuffy.activity.seekto";//跳到固定时间
+
+	private String BROAD_ACTIVITY_CURRENT = "com.monkeyLLuffy.activity.current";// 当前时间
+	private String BROAD_ACTIVITY_DURING = "com.monkeyLLuffy.activity.during";// 当前时间
+
+	AudioManager   am;
+	private String filePath;
+	private String fileName;
+	/**
+	 * handler用来接收消息，来发送广播更新播放时间
+	 */
+	private Handler handler_update_play = new Handler() {
+		public void handleMessage(android.os.Message msg) {
+			if (msg.what == 1) {
+				if (player != null) {
+					if (player.isPlaying()) {
+						currentTime = player.getCurrentPosition(); // 获取当前音乐播放的位置
+						Intent intent = new Intent();
+						intent.setAction(BROAD_ACTIVITY_CURRENT);
+						intent.putExtra("current", player.getCurrentPosition());
+						sendBroadcast(intent); // 给PlayerActivity发送广播
+						Log.i("handleMessage", player.getCurrentPosition() + "");
+						handler_update_play.sendEmptyMessageDelayed(1, 1000);
+					}
+					
+
+				}
+
+			}
+		};
+	};
+	 OnAudioFocusChangeListener afChangeListener = new OnAudioFocusChangeListener() {
+		  public void onAudioFocusChange(int focusChange) {
+		   if (focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {// 暂时获取焦点 
+		    if(player.isPlaying()){
+		     player.pause();
+		    }
+		    
+		   } else if (focusChange == AudioManager.AUDIOFOCUS_GAIN) {
+		    if(player==null){
+		     openFile(filePath, fileName);
+		    }else if(!player.isPlaying()){		     
+		     player.start();
+		     
+		    }
+		    // Resume playback
+		   } else if (focusChange == AudioManager.AUDIOFOCUS_LOSS) {
+		    if(player.isPlaying()){
+		     
+		     player.stop();
+		    }
+		    am.abandonAudioFocus(afChangeListener);
+		    // Stop playback
+		   }else if(focusChange==AudioManager.AUDIOFOCUS_REQUEST_GRANTED){//永久失去焦点
+		    if (player.isPlaying()) {
+		     player.stop();
+		    }
+		    
+		   }else if(focusChange==AudioManager.AUDIOFOCUS_REQUEST_FAILED){
+		    if(player.isPlaying()){
+		     player.stop();
+		    }
+		    
+		   }
+		  }
+		 };
+		 
+	public void onCreate() {
+		super.onCreate();
+		Log.d("service", "service created");
+		player = new MediaPlayer();
+		am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+		
+		MyReceiver myReceiver = new MyReceiver();
+		IntentFilter filter = new IntentFilter();
+		filter.addAction(BROAD_SERVICE_PLAY);
+		filter.addAction(BROAD_SERVICE_SEEKTO);
+		filter.addAction(BROAD_SERVICE_PAUSE);
+		registerReceiver(myReceiver, filter);
+
+	}
+
+
+	@Override
+	@Deprecated
+	public void onStart(Intent intent, int startId) {
+		// TODO Auto-generated method stub
+		super.onStart(intent, startId);
+		handler_update_play.sendEmptyMessage(1);// 更新进度的
+	}
+
+	/**
+	 * 停止音乐
+	 */
+	private void stop() {
+		if (player != null) {
+			player.stop();
+			try {
+				player.prepare(); // 在调用stop后如果需要再次通过start进行播放,需要之前调用prepare函数
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
+	/**
+	 * 打开播放录音文件的程序
+	 * 
+	 * @param f
+	 */
+	private void openFile(String filePath, String fileName) {
+		if (player == null) {
+			player = new MediaPlayer();
+		} else {
+			player.stop();
+			player = new MediaPlayer();
+		}
+		player.setAudioStreamType(AudioManager.STREAM_MUSIC);
+		try {
+			player.setDataSource(filePath);
+			player.prepare();
+			//player.start();
+			// Request audio focus for playback
+			int result = am.requestAudioFocus(afChangeListener,
+			// Use the music stream.
+					AudioManager.STREAM_MUSIC, // Request permanent focus.
+					AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK);
+			if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+				player.start();
+				// Start playback. // 开始播放音乐文件
+			}
+			Intent intent = new Intent(BROAD_ACTIVITY_DURING);
+			intent.putExtra("during", player.getDuration());
+			sendBroadcast(intent);
+			Log.i("开始了", "------------");
+		} catch (Exception e) {
+			// TODO: handle exception
+			e.printStackTrace();
+		}
+	}
+
+	public void pausePlay() { // 关于音乐暂停
+		if (!player.isPlaying()) { // 如果没有播放音乐（要在 playe！=null的情况下）
+			player.start(); // 播放音乐
+			handler_update_play.sendEmptyMessage(1);
+		} else { // 正在播放
+			player.pause(); // 音乐暂停
+		}
+	}
+
+	public IBinder onBind(Intent intent) {
+		return null;
+	}
+	
+	@Override
+	public void onDestroy() {
+		// TODO Auto-generated method stub
+		super.onDestroy();
+		am.abandonAudioFocus(afChangeListener);
+	}
+	public class MyReceiver extends BroadcastReceiver {
+
+		@Override
+		public void onReceive(Context context, Intent intent) {
+			// TODO Auto-generated method stub
+			if (intent.getAction().endsWith(BROAD_SERVICE_PLAY)) {// 进行播放
+				Log.i("MyReceiver", "进行播放");
+				filePath = intent.getStringExtra("filePath");
+				fileName = intent.getStringExtra("fileName");
+				openFile(filePath, fileName);
+			} else if (intent.getAction().equals(BROAD_SERVICE_PAUSE)) {// 进行暂停
+				pausePlay();
+			}else {
+				int position = intent.getIntExtra("position", 0);
+				player.seekTo(position);
+			}
+
+		}
+
+	}
+}

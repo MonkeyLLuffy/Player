@@ -1,0 +1,19 @@
+<resources>
+
+    <string name="app_name">录制音频</string>
+<string name="action_settings">Settings</string>
+
+<string name="hello_world">Hello world!</string>
+ <!-- Image button descriptions for accessibility -->
+
+    <string name="start_marker">开始标记</string>
+    <string name="end_marker">结束标记</string>
+    <string name="rewind">倒回</string>
+    <string name="play">开始</string>
+    <string name="stop">停止</string>
+    <string name="ffwd">快进</string>
+    <string name="zoom_in">放大</string>
+    <string name="zoom_out">缩小</string>
+    <string name="save_button">保存</string>
+
+</resources>

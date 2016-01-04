@@ -1,0 +1,53 @@
+package com.monkeylluffy.recorder.tools;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import android.content.ContentValues;
+import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+
+
+public class CursorTool {
+	private static SQLiteDatabase db;
+	private static MyDBOpenHelper myDBHelper;
+	public CursorTool(Context context){
+		myDBHelper = new MyDBOpenHelper(context, "music.db", null, 1);
+		db = myDBHelper.getWritableDatabase();
+	}
+    
+	
+	
+	public static List<FileBean> getOwnFileList(){
+		List<FileBean> list = new ArrayList<FileBean>();
+		   //参数依次是:表名，列名，where约束条件，where中占位符提供具体的值，指定group by的列，进一步约束
+		        //指定查询结果的排序方式
+		        Cursor cursor = db.query("songlist", null, null, null, null, null, null);
+		        if (cursor.moveToFirst()) {
+		            do {
+		                String path = cursor.getString(cursor.getColumnIndex("filePath"));
+		                String name = cursor.getString(cursor.getColumnIndex("fileName"));
+		                FileBean fileBean = new FileBean();
+		                fileBean.setFilePath(path);
+		                fileBean.setFileTitle(name);
+		                list.add(fileBean);                
+		            } while (cursor.moveToNext());
+		        }
+		        cursor.close();
+		
+		return list;
+	}
+	public static void insertValue(ContentValues values) {
+	    db.insert("songlist", null, values);
+		
+	}
+	
+	public static void deleteValue(String fileAudioName) {
+		db.delete("songlist", "fileName = ?", new String[]{fileAudioName});
+	}
+	
+	
+	
+
+}

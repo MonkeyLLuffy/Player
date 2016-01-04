@@ -1,0 +1,325 @@
+package com.monkeylluffy.recorder;
+import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.IBinder;
+import android.util.Log;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.Button;
+import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.RemoteViews;
+import android.widget.TextView;
+import android.widget.Toast;
+
+//打开一个页面，并且oncreat之后Openfile,open 之后开启服务，把Media 传递
+public class PlayActivity extends Activity {
+
+    private Bundle bundle;
+    private Intent intent;
+
+    private ProgressBar progressBar;//音乐的进度条
+
+    private ImageButton pause;//暂停播放音乐的按钮
+    private TextView fileName;//文件名
+    
+    private TextView nowTime;//现在时间
+    private TextView endTime;//现在时间
+    private boolean isPlaying ;
+    
+    private Handler handler = new Handler();
+	private Notification notification;
+	private NotificationManager notificationManager ;
+	private int current;
+	private int max;
+	private int progress;
+
+    private String fileAudioNameList;
+    private String urlString ;
+    private LinearLayout backLayout;
+    
+
+    private MyUpdateReceiver updateReceiver;
+    private BroadcastReceiver bReceiver;
+
+	private String BROAD_SERVICE_PLAY = "com.monkeyLLuffy.service.play";//控制播放
+	private String BROAD_SERVICE_PAUSE = "com.monkeyLLuffy.service.pause";//控制暂停
+	
+	private String BROAD_ACTIVITY_CURRENT = "com.monkeyLLuffy.activity.current";//当前时间
+	private String BROAD_ACTIVITY_DURING = "com.monkeyLLuffy.activity.during";//当前时间
+	
+    public final static String ACTION_BUTTON = "com.notifications.intent.action.ButtonClick";//按钮中传递
+    
+	public final static String INTENT_BUTTONID_TAG = "ButtonId";
+	/** 播放/暂停 按钮点击 ID */
+	public final static int BUTTON_PALY_ID = 1;
+	
+	/*    
+    
+    private ServiceConnection conn = new ServiceConnection() {  
+          
+        //Activity与Service断开连接时回调该方法  
+        @Override  
+        public void onServiceDisconnected(ComponentName name) {  
+            System.out.println("------Service DisConnected-------");  
+        }  
+          
+        //Activity与Service连接成功时回调该方法  
+        @Override  
+        public void onServiceConnected(ComponentName name, IBinder service) {  
+            Log.i("binder---------", " ------Service Connected-------");
+			binder = (CountService.ServiceBinder) service; 
+			 binder.openFileI(fileAudioNameList, urlString);
+		        runnable = new Runnable() {		
+		    		@Override
+		    		public void run() {
+		    			// TODO Auto-generated method stub        			
+		    			progress = binder.progress();
+		    			if (progress < 100) {
+		    				progressBar.setProgress(progress);
+		    				handler.postDelayed(runnable, 1000);
+		    	        	nowTime.setText(new GetSystemDateTime().timeString(binder.getNowTime()));
+		    			}else {
+		    				Log.i("------",fileAudioNameList+"已完成");
+		    				progressBar.setProgress(100);
+		    				pause.setEnabled(false);
+		    				pause.getBackground().setAlpha(0);
+		    				pause.setImageResource(R.drawable.stop);
+		    				nowTime.setText(new GetSystemDateTime().timeString(binder.getPlayerTime()));
+		        			
+		    			}
+		    		}
+		    	};
+		     	handler.post(runnable);
+		    	initButtonReceiver();
+		    	postNotification();
+		    	endTime.setText(new GetSystemDateTime().timeString(binder.getPlayerTime()));
+		    	
+        }
+    };  */
+    
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+	// TODO Auto-generated method stub
+	super.onCreate(savedInstanceState);
+	setContentView(R.layout.playsound);
+	Intent newIntent = getIntent();
+	fileAudioNameList = newIntent.getExtras().getString("fileAudioNameList");  
+    urlString = newIntent.getExtras().getString("urlString");
+	Log.i("fileAudioNameList", " "+fileAudioNameList);
+	
+	initView();
+	initButtonReceiver();
+	initUpdateReceiver();
+	initEvent();
+	initNotification();
+	
+	Intent intent = new Intent(PlayActivity.this,CountService.class);
+	startService(intent);//开启一个服务
+	play();
+	}
+	public void play(){
+		intent = new Intent();
+		intent.setAction(BROAD_SERVICE_PLAY);
+		intent.putExtra("fileName", fileAudioNameList);
+		intent.putExtra("filePath", urlString);
+		sendBroadcast(intent);
+	}
+	
+	private void initEvent() {
+		// TODO Auto-generated method stub
+		backLayout.setOnClickListener(new  OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				// TODO Auto-generated method stub
+				finish();
+			}
+		});
+		
+		pause.setOnClickListener(new OnClickListener() {
+    		
+    		@Override
+    		public void onClick(View v) {
+    			// TODO Auto-generated method stub
+    			pausePlay();
+    			if (isPlaying) {
+    				isPlaying = false;
+    				pause.setBackgroundResource(R.drawable.pause_1);
+    				notification.contentView.setImageViewResource(R.id.noti_pause, R.drawable.pause_1);
+				}
+    			else{
+    				isPlaying = true;
+    				pause.setBackgroundResource(R.drawable.play_6);
+    				notification.contentView.setImageViewResource(R.id.noti_pause, R.drawable.play_6);
+				}
+    			
+    		}
+    	});
+		
+		
+		
+		
+	}
+	private void initView() {
+		// TODO Auto-generated method stub
+		progressBar = (ProgressBar) findViewById(R.id.playProgressBar);
+		pause = (ImageButton) findViewById(R.id.pause);	
+		fileName = (TextView) findViewById(R.id.fileName);
+		backLayout = (LinearLayout) findViewById(R.id.back);
+		nowTime = (TextView) findViewById(R.id.nowTime);
+		endTime = (TextView) findViewById(R.id.endTime);		
+		pause.setBackgroundResource(R.drawable.pause_1);
+		fileName.setText(fileAudioNameList);
+		
+	}
+
+	@Override
+	protected void onDestroy() {
+		// TODO Auto-generated method stub
+		if(bReceiver != null){
+			unregisterReceiver(bReceiver);
+		}if (updateReceiver != null) {
+			unregisterReceiver(updateReceiver);
+		}
+		super.onDestroy();
+	}
+	
+	public void initNotification(){
+		notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+		notification = new Notification(R.drawable.ico, "下载", System.currentTimeMillis());
+
+        RemoteViews view = new RemoteViews(getPackageName(), R.layout.notification);
+        notification.contentView = view;
+
+        PendingIntent contentIntent = PendingIntent.getActivity(this,
+                R.string.app_name, new Intent(PlayActivity.this,LuYinActivity.class),
+                PendingIntent.FLAG_UPDATE_CURRENT);
+
+        notification.contentIntent = contentIntent;
+        Intent buttonIntent = new Intent(ACTION_BUTTON); 
+        buttonIntent.putExtra(INTENT_BUTTONID_TAG, BUTTON_PALY_ID); 
+
+        PendingIntent intent_prev = PendingIntent.getBroadcast(this, 1, buttonIntent, PendingIntent.FLAG_UPDATE_CURRENT);  
+        notification.contentView.setOnClickPendingIntent(R.id.noti_pause, intent_prev);
+        notification.contentView.setImageViewResource(R.id.noti_pause, R.drawable.pause_1);
+	}
+	
+	/** 带按钮的通知栏点击广播接收 */
+	public void initButtonReceiver(){
+		bReceiver = new ButtonBroadcastReceiver();
+		IntentFilter intentFilter = new IntentFilter();
+		intentFilter.addAction(ACTION_BUTTON);
+		registerReceiver(bReceiver, intentFilter);
+	}
+	public void initUpdateReceiver(){
+		updateReceiver  = new MyUpdateReceiver();
+		IntentFilter filter = new IntentFilter();
+		filter.addAction(BROAD_ACTIVITY_CURRENT);
+		filter.addAction(BROAD_ACTIVITY_DURING);
+		registerReceiver(updateReceiver, filter);
+	}
+
+	public void pausePlay() {
+		// TODO Auto-generated method stub
+		Intent intent = new Intent();
+		intent.setAction(BROAD_SERVICE_PAUSE);
+		sendBroadcast(intent);
+	}
+	
+	public class ButtonBroadcastReceiver extends BroadcastReceiver{
+
+		@Override
+		public void onReceive(Context context, Intent intent) {
+			// TODO Auto-generated method stub
+			String action = intent.getAction();
+			if(action.equals(ACTION_BUTTON)){
+				//通过传递过来的ID判断按钮点击属性或者通过getResultCode()获得相应点击事件
+				int buttonId = intent.getIntExtra(INTENT_BUTTONID_TAG, 0);
+				switch (buttonId) {
+				case BUTTON_PALY_ID:
+					pausePlay();
+					if(isPlaying){
+						isPlaying = false;
+        				pause.setBackgroundResource(R.drawable.pause_1);
+						 notification.contentView.setImageViewResource(R.id.noti_pause, R.drawable.pause_1);
+					}else{
+						//换图片
+						isPlaying = true;
+        				pause.setBackgroundResource(R.drawable.play_6);
+						notification.contentView.setImageViewResource(R.id.noti_pause, R.drawable.play_6);
+					}
+					notificationManager.notify(0, notification);
+					Toast.makeText(getApplicationContext(), "onclick........", Toast.LENGTH_SHORT).show();
+					break;
+				default:
+					break;
+				}
+			}
+		}
+	}
+	//通过两边都注册广播的形式互相通信
+	
+	public class MyUpdateReceiver extends BroadcastReceiver{
+
+		@Override
+		public void onReceive(Context context, Intent intent) {
+			// TODO Auto-generated method stub
+			if (intent.getAction().equals(BROAD_ACTIVITY_CURRENT)) {				
+				current = intent.getIntExtra("current", 0);
+				progressBar.setProgress(current);
+				
+				Log.i("MyUpdateReceiver  current", current+"");
+				Log.i("MyUpdateReceiver  max", max+"");
+				
+				if ((current/1000) >= (max/1000)) {
+					//不知道为啥，声音完了也达不到那个Max的时间
+					progress = 100;
+					progressBar.setProgress(max);
+					pause.setBackgroundResource(R.drawable.stop);
+					pause.setEnabled(false);
+					
+					notification.contentView.setProgressBar(R.id.noti_pd, 1,
+		                    max, false);
+					nowTime.setText(GetSystemDateTime.timeString(max));
+			        notification.contentView.setTextViewText(R.id.noti_tv, 100 + "%");
+			        notificationManager.notify(0, notification);	
+			        notification.contentView.setOnClickPendingIntent(R.id.noti_pause, null);
+			        notification.contentView.setImageViewResource(R.id.noti_pause, R.drawable.stop);
+			        
+				}else {
+					progress = (int)((((float)current)/max)*100);
+					notification.contentView.setProgressBar(R.id.noti_pd, max,
+		                    current, false);
+					notification.contentView.setTextViewText(R.id.noti_tv, progress + "%");
+			        notificationManager.notify(0, notification);				
+					nowTime.setText(GetSystemDateTime.timeString(current));
+				}
+			}
+			if (intent.getAction().equals(BROAD_ACTIVITY_DURING)) {
+				max = intent.getIntExtra("during", 0);
+				progressBar.setMax(max);
+				endTime.setText(GetSystemDateTime.timeString(max));
+			}
+			
+		}
+		
+		
+		
+	}
+
+	
+	
+}

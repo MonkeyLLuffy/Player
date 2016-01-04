@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="40dp" >
+
+    <ImageView
+        android:id="@+id/speak"
+        android:layout_width="25dp"
+        android:layout_height="25dp"        
+        android:layout_marginLeft="10dp"
+        android:adjustViewBounds="true"
+        android:background="@drawable/speak" />
+
+    <TextView
+        android:id="@+id/item_text"
+       	android:layout_toRightOf="@id/speak"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="10dp"   
+        android:textColor="#000"
+        android:textSize="18sp" />
+    
+</RelativeLayout>

@@ -1,0 +1,236 @@
+package com.monkeylluffy.recorder;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import android.app.Activity;
+import android.app.ProgressDialog;
+import android.app.Service;
+import android.content.ContentResolver;
+import android.content.ContentValues;
+import android.content.Intent;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Message;
+import android.provider.MediaStore;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.Window;
+import android.widget.Button;
+import android.widget.ListView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+public class SearchMP3 extends Activity{
+
+	private HashMap<String, Map<String, String>> mGruopMap = new HashMap<String,Map<String,String>>();
+	private List<FileBean> list = new ArrayList<FileBean>();
+	private final static int SCAN_OK = 1;
+	ListView listView;
+	AddFileAdapter adapter;
+	private TextView item_sure;
+	List<String> alreadyList;
+	private Handler mHandler = new Handler(){
+
+		@Override
+		public void handleMessage(Message msg) {
+			super.handleMessage(msg);
+			switch (msg.what) {
+			case SCAN_OK:				
+				adapter = new AddFileAdapter(SearchMP3.this, list = makeFileList(mGruopMap),item_sure);
+				listView.setAdapter(adapter);
+				break;
+			}
+		}
+		
+	};
+	
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		// TODO Auto-generated method stub
+		super.onCreate(savedInstanceState);
+		requestWindowFeature(Window.FEATURE_CUSTOM_TITLE); 
+		setContentView(R.layout.filelist);
+		getWindow().setFeatureInt(Window.FEATURE_CUSTOM_TITLE, R.layout.titlebar);  //titlebar为自己标题栏的布局
+		
+		myDBHelper = new MyDBOpenHelper(SearchMP3.this, "music.db", null, 1);
+		
+		
+		//Intent intent = getIntent();
+		//Bundle bundle = intent.getExtras();
+		//alreadyList = bundle.getStringArrayList("fileList");
+		
+		item_sure = (TextView) findViewById(R.id.item_sure);		
+		listView = (ListView) findViewById(R.id.file_list);
+		getFiles();	
+		item_sure.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				// TODO Auto-generated method stub
+				//添加数据库，跳转参数的设置
+				Toast.makeText(SearchMP3.this, "选中 " + adapter.getSelectItems().size() + " item", Toast.LENGTH_LONG).show();
+				List<Integer> theList = adapter.getSelectItems();
+			    db = myDBHelper.getWritableDatabase();
+				for (int i = 0; i < theList.size(); i++) {
+					FileBean fileBean = list.get(theList.get(i));
+					ContentValues values1 = new ContentValues();
+			        values1.put("filePath", fileBean.getFilePath());
+			        values1.put("fileName", fileBean.getFileTitle());
+			        //参数依次是：表名，强行插入null值得数据列的列名，一行记录的数据
+			        db.insert("songlist", null, values1);
+			        
+			        Toast.makeText(SearchMP3.this, "插入完毕~", Toast.LENGTH_SHORT).show();
+				}
+				
+				Intent intent = new Intent(SearchMP3.this,LuYinActivity.class);
+				startActivity(intent);
+			}
+		});
+		
+	}
+	public void getFiles(){	
+		if(!Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)){
+			Toast.makeText(this, "暂无外部存储", Toast.LENGTH_SHORT).show();
+			return;
+		}
+
+		new Thread(new Runnable() {
+			
+			@Override
+			public void run() {
+				
+				Uri mImageUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+				ContentResolver mContentResolver = SearchMP3.this.getContentResolver();
+
+				Cursor mCursor = getContentResolver().query(
+						MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, null, null, null,
+						MediaStore.MediaColumns.TITLE);
+				
+				while (mCursor.moveToNext()) {
+					//获取文件的路径
+					String filePath = mCursor.getString(mCursor
+							.getColumnIndex(MediaStore.Audio.AudioColumns.DATA));
+					
+					//获取文件的标题
+					String fileTitle = mCursor.getString(mCursor
+							.getColumnIndex(MediaStore.Audio.AudioColumns.TITLE));
+					
+					//获取该文件的时间
+					String fileTime = mCursor.getString(mCursor
+							.getColumnIndex(MediaStore.Audio.AudioColumns.TITLE));
+					
+					long modify = mCursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED);
+					
+
+					int isMusic = mCursor.getInt(mCursor
+							.getColumnIndex(MediaStore.Audio.Media.IS_MUSIC)); // 是否为音乐
+										
+					if (isMusic!=0) {
+						
+						Map<String, String> map = new HashMap<String, String>();
+						map.put("fileTitle", fileTitle);
+						map.put("filePath", filePath);
+						map.put("fileTime", fileTime);
+						mGruopMap.put(filePath, map);
+						
+					} else {
+						//如果已经扫描过。。。。。不做处理
+					}
+				}
+				
+				mCursor.close();
+				
+				//通知Handler扫描图片完成
+				mHandler.sendEmptyMessage(SCAN_OK);
+			}
+		}).start();
+		
+		
+	}
+	
+	
+	
+	
+	
+	public boolean isContain(String path) {
+		for(int i = 0;i<alreadyList.size();i++){
+			if (alreadyList.get(i).equals(path)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	
+
+	private SQLiteDatabase db;
+	private MyDBOpenHelper myDBHelper;
+	
+/*	@Override
+	public void onBackPressed() {
+	Toast.makeText(this, "选中 " + adapter.getSelectItems().size() + " item", Toast.LENGTH_LONG).show();
+	List<Integer> theList = adapter.getSelectItems();
+    db = myDBHelper.getWritableDatabase();
+	for (int i = 0; i < theList.size(); i++) {
+		FileBean fileBean = list.get(theList.get(i));
+		ContentValues values1 = new ContentValues();
+        values1.put("filePath", fileBean.getFilePath());
+        values1.put("fileName", fileBean.getFileTitle());
+        //参数依次是：表名，强行插入null值得数据列的列名，一行记录的数据
+        db.insert("songlist", null, values1);
+        
+        Toast.makeText(SearchMP3.this, "插入完毕~", Toast.LENGTH_SHORT).show();
+	}
+	
+	Intent intent = new Intent(SearchMP3.this,LuYinActivity.class);
+	startActivity(intent);
+		super.onBackPressed();
+	}*/
+	
+	/**
+	 * 组装分组界面listView的数据源，因为我们扫描手机的时候将图片信息放在HashMap中
+	 * 所以需要遍历HashMap将数据组装成List
+	 * 
+	 * @param mGruopMap
+	 * @return
+	 */
+	private List<FileBean> makeFileList(HashMap<String, Map<String, String>> mGruopMap){
+		if(mGruopMap.size() == 0){
+			return null;
+		}
+		List<FileBean> list = new ArrayList<FileBean>();
+		
+		Iterator<Map.Entry<String, Map<String, String>>> it = mGruopMap.entrySet().iterator();
+		while (it.hasNext()) {
+			Map.Entry<String, Map<String, String>> entry = it.next();
+			FileBean mFileBean = new FileBean();
+			String key = entry.getKey();
+			Map<String, String> map = entry.getValue();
+			
+			mFileBean.setFilePath(map.get("filePath"));
+			mFileBean.setFileTime(map.get("fileTime"));
+			mFileBean.setFileTitle(map.get("fileTitle"));
+			
+			list.add(mFileBean);
+		}		
+		return list;
+		
+	}
+
+
+	
+	
+	
+	
+	
+	
+	
+}
